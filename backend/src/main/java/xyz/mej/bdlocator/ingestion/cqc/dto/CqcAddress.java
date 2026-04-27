@@ -1,14 +1,11 @@
 package xyz.mej.bdlocator.ingestion.cqc.dto;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import lombok.Data;
-
-@Data
-@JsonIgnoreProperties(ignoreUnknown = true)
-public class CqcAddress {
-    private String addressLine1;
-    private String addressLine2;
-    private String city;
-    private String county;
-    private String postalCode;
-}
+/**
+ * Retained for reference only — the CQC API returns address fields flat
+ * on the provider/location response, not nested in an address object.
+ * This class is not used in the ingestion pipeline.
+ *
+ * @deprecated use postalAddressLine1/postalAddressTownCity etc. directly
+ */
+@Deprecated
+public class CqcAddress {}

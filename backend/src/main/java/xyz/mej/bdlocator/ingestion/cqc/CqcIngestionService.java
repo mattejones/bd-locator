@@ -10,12 +10,15 @@ import xyz.mej.bdlocator.ingestion.cqc.dto.*;
 import xyz.mej.bdlocator.ingestion.geocoding.GeocodingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.GeometryFactory;
+import org.locationtech.jts.geom.PrecisionModel;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.util.List;
+import java.util.Arrays;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -29,70 +32,76 @@ public class CqcIngestionService {
     private final LocationRepository locationRepository;
     private final IngestionWatermarkRepository watermarkRepository;
 
+    private final GeometryFactory geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
+
     @Value("${app.cqc.page-size:1000}")
     private int pageSize;
 
     private static final String WATERMARK_SOURCE = "cqc";
 
-    /**
-     * Bootstrap mode — pages through the full CQC provider list.
-     * Intended for initial seeding. Safe to re-run; uses upsert semantics.
-     */
     public void runBootstrap() {
-        log.info("Starting CQC bootstrap ingestion");
+        log.info("Starting CQC full bootstrap");
         int page = 1;
         int totalPages;
-
         do {
-            log.info("Fetching CQC provider page {}", page);
+            log.info("Fetching provider page {}", page);
             CqcProviderPageResponse response = cqcClient.fetchProviderPage(page, pageSize);
             totalPages = response.getTotalPages();
-
-            response.getProviders().forEach(summary ->
-                    cqcClient.fetchProviderDetail(summary.getProviderId())
-                            .ifPresent(this::ingestProvider)
-            );
-
+            response.getProviders().forEach(s ->
+                    cqcClient.fetchProviderDetail(s.getProviderId()).ifPresent(this::ingestProvider));
             page++;
         } while (page <= totalPages);
-
         advanceWatermark(OffsetDateTime.now());
-        log.info("CQC bootstrap ingestion complete");
+        log.info("CQC full bootstrap complete");
     }
 
-    /**
-     * On-demand mode — fetches only records changed since the last watermark.
-     * Safe to invoke on every user-triggered refresh.
-     */
+    public void runRegionalBootstrap(String region) {
+        log.info("Starting regional bootstrap for: {}", region);
+        int page = 1;
+        int totalPages;
+        int count = 0;
+        do {
+            log.info("Fetching provider page {} for region: {}", page, region);
+            CqcProviderPageResponse response = cqcClient.fetchProviderPageByRegion(page, pageSize, region);
+            if (response == null || response.getProviders() == null) break;
+            totalPages = response.getTotalPages();
+            for (CqcProviderSummary summary : response.getProviders()) {
+                cqcClient.fetchProviderDetail(summary.getProviderId()).ifPresent(this::ingestProvider);
+                count++;
+            }
+            page++;
+        } while (page <= totalPages);
+        advanceWatermark(OffsetDateTime.now());
+        log.info("Regional bootstrap complete — {} providers for region: {}", count, region);
+    }
+
     public void runDeltaSync() {
         OffsetDateTime since = getWatermark();
         OffsetDateTime until = OffsetDateTime.now();
-        log.info("Starting CQC delta sync from {} to {}", since, until);
-
+        log.info("Starting delta sync from {} to {}", since, until);
         CqcChangesResponse changes = cqcClient.fetchChanges(since, until);
-
         if (changes == null || changes.getChanges() == null) {
-            log.info("No CQC changes found in window");
+            log.info("No changes found");
             advanceWatermark(until);
             return;
         }
-
         changes.getChanges().forEach(change -> {
             if ("location".equals(change.getType()) && change.getLocationId() != null) {
-                cqcClient.fetchLocationDetail(change.getLocationId())
-                        .ifPresent(this::ingestLocation);
+                cqcClient.fetchLocationDetail(change.getLocationId()).ifPresent(this::ingestLocation);
             } else if ("provider".equals(change.getType()) && change.getProviderId() != null) {
-                cqcClient.fetchProviderDetail(change.getProviderId())
-                        .ifPresent(this::ingestProvider);
+                cqcClient.fetchProviderDetail(change.getProviderId()).ifPresent(this::ingestProvider);
             }
         });
-
         advanceWatermark(until);
-        log.info("CQC delta sync complete — {} changes processed", changes.getChanges().size());
+        log.info("Delta sync complete — {} changes", changes.getChanges().size());
+    }
+
+    public boolean providerExists(String providerId) {
+        return providerRepository.existsById(providerId);
     }
 
     @Transactional
-    protected void ingestProvider(CqcProviderDetail detail) {
+    public void ingestProvider(CqcProviderDetail detail) {
         Provider provider = providerRepository.findById(detail.getProviderId())
                 .orElse(new Provider());
 
@@ -101,27 +110,24 @@ public class CqcIngestionService {
         provider.setOrganisationType(detail.getType());
         provider.setUpdatedAt(OffsetDateTime.now());
 
-        // Only set CH number if present — never overwrite an existing value with null
         if (detail.getCompaniesHouseNumber() != null && !detail.getCompaniesHouseNumber().isBlank()) {
             provider.setCompaniesHouseNo(detail.getCompaniesHouseNumber());
         }
-
         if (provider.getIngestedAt() == null) {
             provider.setIngestedAt(OffsetDateTime.now());
         }
 
         providerRepository.save(provider);
 
-        if (detail.getLocations() != null) {
-            detail.getLocations().forEach(loc ->
-                    cqcClient.fetchLocationDetail(loc.getLocationId())
-                            .ifPresent(this::ingestLocation)
+        if (detail.getLocationIds() != null) {
+            detail.getLocationIds().forEach(locationId ->
+                    cqcClient.fetchLocationDetail(locationId).ifPresent(this::ingestLocation)
             );
         }
     }
 
     @Transactional
-    protected void ingestLocation(CqcLocationDetail detail) {
+    public void ingestLocation(CqcLocationDetail detail) {
         Location location = locationRepository.findById(detail.getLocationId())
                 .orElse(new Location());
 
@@ -131,12 +137,14 @@ public class CqcIngestionService {
         location.setRegistrationStatus(detail.getRegistrationStatus());
         location.setUpdatedAt(OffsetDateTime.now());
 
-        if (detail.getAddress() != null) {
-            location.setAddressLines(buildAddressLines(detail.getAddress()));
-        }
+        location.setAddressLines(buildAddressLines(
+                detail.getPostalAddressLine1(),
+                detail.getPostalAddressLine2(),
+                detail.getPostalAddressTownCity(),
+                detail.getPostalAddressCounty()
+        ));
 
-        if (detail.getCurrentRatings() != null
-                && detail.getCurrentRatings().getOverall() != null) {
+        if (detail.getCurrentRatings() != null && detail.getCurrentRatings().getOverall() != null) {
             location.setRating(detail.getCurrentRatings().getOverall().getRating());
         }
 
@@ -148,25 +156,31 @@ public class CqcIngestionService {
             );
         }
 
-        if (detail.getServiceUserBands() != null) {
+        if (detail.getSpecialisms() != null) {
             location.setUserBands(
-                    detail.getServiceUserBands().stream()
-                            .map(CqcUserBand::getName)
+                    detail.getSpecialisms().stream()
+                            .map(CqcSpecialism::getName)
                             .toArray(String[]::new)
             );
         }
 
-        // Attach provider if it exists — don't block ingestion if it doesn't
         providerRepository.findById(detail.getProviderId())
                 .ifPresent(location::setProvider);
 
-        // Geocode — failure is logged but never blocks the record being saved
-        geocodingService.geocode(detail.getPostalCode())
-                .ifPresentOrElse(
-                        location::setCoordinates,
-                        () -> log.warn("No coordinates resolved for location {} postcode {}",
-                                detail.getLocationId(), detail.getPostalCode())
-                );
+        if (detail.getOnspdLatitude() != null && detail.getOnspdLongitude() != null) {
+            location.setCoordinates(
+                    geometryFactory.createPoint(
+                            new Coordinate(detail.getOnspdLongitude(), detail.getOnspdLatitude())
+                    )
+            );
+        } else {
+            geocodingService.geocode(detail.getPostalCode())
+                    .ifPresentOrElse(
+                            location::setCoordinates,
+                            () -> log.warn("No coordinates for location {} postcode {}",
+                                    detail.getLocationId(), detail.getPostalCode())
+                    );
+        }
 
         if (location.getIngestedAt() == null) {
             location.setIngestedAt(OffsetDateTime.now());
@@ -175,19 +189,12 @@ public class CqcIngestionService {
         locationRepository.save(location);
     }
 
-    private String buildAddressLines(CqcAddress address) {
-        return List.of(
-                nullToEmpty(address.getAddressLine1()),
-                nullToEmpty(address.getAddressLine2()),
-                nullToEmpty(address.getCity()),
-                nullToEmpty(address.getCounty())
-        ).stream()
-                .filter(s -> !s.isBlank())
+    private String buildAddressLines(String... parts) {
+        // Arrays.stream is used deliberately — List.of() rejects null elements
+        // and CQC frequently omits county, causing NPE with List.of()
+        return Arrays.stream(parts)
+                .filter(s -> s != null && !s.isBlank())
                 .collect(Collectors.joining(", "));
-    }
-
-    private String nullToEmpty(String value) {
-        return value == null ? "" : value;
     }
 
     private OffsetDateTime getWatermark() {

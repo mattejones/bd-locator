@@ -11,8 +11,21 @@ public class CqcProviderDetail {
     private String providerId;
     private String name;
     private String companiesHouseNumber;
-    private String type;               // organisation type e.g. "Social Care Org"
+    private String type;
+    private String organisationType;
+    private String registrationStatus;
+    private String region;
+    private String localAuthority;
     private String postalCode;
-    private CqcAddress address;
-    private List<CqcLocation> locations;
+    private String postalAddressLine1;
+    private String postalAddressLine2;
+    private String postalAddressTownCity;
+    private String postalAddressCounty;
+    private String website;
+    private String mainPhoneNumber;
+    private Double onspdLatitude;
+    private Double onspdLongitude;
+
+    // Array of plain location ID strings per the actual API schema
+    private List<String> locationIds;
 }

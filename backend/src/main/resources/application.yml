@@ -24,8 +24,8 @@ server:
 
 app:
   cqc:
-    base-url: https://api.cqc.org.uk/public/v1
-    partner-code: ${CQC_PARTNER_CODE:bdlocator}
+    base-url: https://api.service.cqc.org.uk/public/v1
+    subscription-key: ${CQC_SUBSCRIPTION_KEY:}
     page-size: 1000
   postcodes:
     base-url: https://api.postcodes.io

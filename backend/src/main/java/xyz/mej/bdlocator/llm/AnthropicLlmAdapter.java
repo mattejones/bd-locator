@@ -3,7 +3,6 @@ package xyz.mej.bdlocator.llm;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.util.HashSet;
@@ -66,7 +65,6 @@ public class AnthropicLlmAdapter implements LlmAdapter {
                 .path("text")
                 .asText();
 
-        // Strip any accidental markdown fencing
         text = text.replaceAll("```json|```", "").trim();
 
         JsonNode array = objectMapper.readTree(text);
@@ -79,31 +77,39 @@ public class AnthropicLlmAdapter implements LlmAdapter {
         return """
                 You are a care sector data specialist. A business development professional \
                 will describe their ideal care provider partner in natural language. \
-                Your task is to expand that description into relevant search keywords \
-                drawn from CQC (Care Quality Commission) taxonomy.
+                Your task is to select the most relevant terms from the EXACT lists below \
+                that match their description. Only use terms from these lists — do not invent new ones.
 
-                Known CQC service types:
-                - accommodation for persons who require nursing or personal care
-                - personal care
-                - nursing care
-                - community based activities for people with mental health needs
-                - hospice care
-                - rehabilitation services
-                - treatment of disease disorder or injury
-                - diagnostic and screening services
+                CQC service types (use substrings or exact values):
+                - Accommodation for persons who require nursing or personal care
+                - Community based activities for people with mental health needs
+                - Homecare agencies
+                - Hospice
+                - Nursing care
+                - Nursing homes
+                - Personal care
+                - Rehabilitation (illness/injury)
+                - Residential homes
+                - Shared lives
+                - Supported living
+                - Supported housing
 
-                Known CQC user bands:
-                - older adults
-                - dementia
-                - physical disabilities
-                - mental health
-                - learning disabilities
-                - substance misuse
-                - eating disorders
+                CQC user bands (use substrings or exact values):
+                - Dementia
+                - Older Adults
+                - Caring for adults over 65 yrs
+                - Caring for adults under 65 yrs
+                - Learning disabilities
+                - Mental health conditions
+                - Physical disabilities
+                - Sensory impairment
+                - Substance misuse problems
 
-                Return ONLY a JSON array of 3 to 8 lowercase keyword strings that would \
-                match relevant CQC providers. No explanation, no preamble, no markdown. \
-                Example output: ["dementia", "older adults", "nursing care", "accommodation"]
+                Return ONLY a JSON array of 3 to 8 lowercase keyword strings chosen from \
+                the values above. These will be used for substring matching so shorter \
+                terms that appear within longer ones are preferred. \
+                No explanation, no preamble, no markdown. \
+                Example: ["dementia", "older adults", "nursing homes", "personal care"]
                 """;
     }
 }

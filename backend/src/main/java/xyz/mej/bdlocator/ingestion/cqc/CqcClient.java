@@ -16,18 +16,18 @@ import java.util.Optional;
 @Component
 public class CqcClient {
 
+    private static final String SUBSCRIPTION_HEADER = "Ocp-Apim-Subscription-Key";
+
     private final WebClient webClient;
-    private final String partnerCode;
+    private final String subscriptionKey;
 
     public CqcClient(
             WebClient.Builder builder,
             @Value("${app.cqc.base-url}") String baseUrl,
-            @Value("${app.cqc.partner-code}") String partnerCode
+            @Value("${app.cqc.subscription-key:}") String subscriptionKey
     ) {
-        this.webClient = builder
-                .baseUrl(baseUrl)
-                .build();
-        this.partnerCode = partnerCode;
+        this.webClient = builder.baseUrl(baseUrl).build();
+        this.subscriptionKey = subscriptionKey;
     }
 
     public CqcProviderPageResponse fetchProviderPage(int page, int perPage) {
@@ -35,8 +35,22 @@ public class CqcClient {
                 .uri(u -> u.path("/providers")
                         .queryParam("page", page)
                         .queryParam("perPage", perPage)
-                        .queryParam("partnerCode", partnerCode)
                         .build())
+                .header(SUBSCRIPTION_HEADER, subscriptionKey)
+                .retrieve()
+                .bodyToMono(CqcProviderPageResponse.class)
+                .retryWhen(Retry.backoff(3, Duration.ofSeconds(2)))
+                .block();
+    }
+
+    public CqcProviderPageResponse fetchProviderPageByRegion(int page, int perPage, String region) {
+        return webClient.get()
+                .uri(u -> u.path("/providers")
+                        .queryParam("page", page)
+                        .queryParam("perPage", perPage)
+                        .queryParam("region", region)
+                        .build())
+                .header(SUBSCRIPTION_HEADER, subscriptionKey)
                 .retrieve()
                 .bodyToMono(CqcProviderPageResponse.class)
                 .retryWhen(Retry.backoff(3, Duration.ofSeconds(2)))
@@ -47,9 +61,8 @@ public class CqcClient {
         try {
             return Optional.ofNullable(
                     webClient.get()
-                            .uri(u -> u.path("/providers/{id}")
-                                    .queryParam("partnerCode", partnerCode)
-                                    .build(providerId))
+                            .uri(u -> u.path("/providers/{id}").build(providerId))
+                            .header(SUBSCRIPTION_HEADER, subscriptionKey)
                             .retrieve()
                             .bodyToMono(CqcProviderDetail.class)
                             .retryWhen(Retry.backoff(3, Duration.ofSeconds(2)))
@@ -65,9 +78,8 @@ public class CqcClient {
         try {
             return Optional.ofNullable(
                     webClient.get()
-                            .uri(u -> u.path("/locations/{id}")
-                                    .queryParam("partnerCode", partnerCode)
-                                    .build(locationId))
+                            .uri(u -> u.path("/locations/{id}").build(locationId))
+                            .header(SUBSCRIPTION_HEADER, subscriptionKey)
                             .retrieve()
                             .bodyToMono(CqcLocationDetail.class)
                             .retryWhen(Retry.backoff(3, Duration.ofSeconds(2)))
@@ -86,8 +98,8 @@ public class CqcClient {
                 .uri(u -> u.path("/changes/location")
                         .queryParam("startTimestamp", start)
                         .queryParam("endTimestamp", end)
-                        .queryParam("partnerCode", partnerCode)
                         .build())
+                .header(SUBSCRIPTION_HEADER, subscriptionKey)
                 .retrieve()
                 .bodyToMono(CqcChangesResponse.class)
                 .retryWhen(Retry.backoff(3, Duration.ofSeconds(2)))
