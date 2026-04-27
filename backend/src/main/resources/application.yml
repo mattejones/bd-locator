@@ -19,12 +19,13 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: true
 
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          issuer-uri: https://accounts.google.com
-          jwk-set-uri: https://www.googleapis.com/oauth2/v3/certs
+  # OAuth2 / JWT — enabled in Phase 6 when NextAuth is integrated
+  # security:
+  #   oauth2:
+  #     resourceserver:
+  #       jwt:
+  #         issuer-uri: https://accounts.google.com
+  #         jwk-set-uri: https://www.googleapis.com/oauth2/v3/certs
 
 server:
   port: 8080
