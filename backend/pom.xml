@@ -11,7 +11,7 @@
         <relativePath/>
     </parent>
 
-    <groupId>com.bdlocator</groupId>
+    <groupId>xyz.mej</groupId>
     <artifactId>bd-locator-backend</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>bd-locator-backend</name>

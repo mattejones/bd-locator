@@ -1,4 +1,4 @@
-package com.bdlocator.domain.model;
+package xyz.mej.bdlocator.domain.model;
 
 import jakarta.persistence.*;
 import lombok.Getter;

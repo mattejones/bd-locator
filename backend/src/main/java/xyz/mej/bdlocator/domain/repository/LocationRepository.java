@@ -1,6 +1,6 @@
-package com.bdlocator.domain.repository;
+package xyz.mej.bdlocator.domain.repository;
 
-import com.bdlocator.domain.model.Location;
+import xyz.mej.bdlocator.domain.model.Location;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
