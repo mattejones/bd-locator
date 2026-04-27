@@ -12,21 +12,21 @@ import java.util.List;
 public interface LocationRepository extends JpaRepository<Location, String> {
 
     /**
-     * Returns locations within a given radius (km) of an origin point,
-     * ordered by distance ascending. Uses PostGIS ST_DWithin for index-friendly
-     * distance filtering, ST_Distance for ordering.
+     * Returns locations within a given radius of an origin point, ordered by distance.
+     * Uses CAST(... AS geography) rather than ::geography — Hibernate intercepts :: and
+     * misreads :geography as a named parameter, causing a syntax error.
      */
     @Query(value = """
             SELECT l.* FROM locations l
             WHERE l.coordinates IS NOT NULL
               AND ST_DWithin(
-                    l.coordinates::geography,
-                    ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography,
+                    CAST(l.coordinates AS geography),
+                    CAST(ST_SetSRID(ST_MakePoint(:lng, :lat), 4326) AS geography),
                     :radiusMetres
                   )
             ORDER BY ST_Distance(
-                l.coordinates::geography,
-                ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography
+                CAST(l.coordinates AS geography),
+                CAST(ST_SetSRID(ST_MakePoint(:lng, :lat), 4326) AS geography)
             )
             """, nativeQuery = true)
     List<Location> findWithinRadius(
@@ -37,12 +37,11 @@ public interface LocationRepository extends JpaRepository<Location, String> {
 
     /**
      * Returns the distance in metres between a location and an origin point.
-     * Used by the scoring engine to compute proximity decay per candidate.
      */
     @Query(value = """
             SELECT ST_Distance(
-                l.coordinates::geography,
-                ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography
+                CAST(l.coordinates AS geography),
+                CAST(ST_SetSRID(ST_MakePoint(:lng, :lat), 4326) AS geography)
             )
             FROM locations l
             WHERE l.location_id = :locationId
