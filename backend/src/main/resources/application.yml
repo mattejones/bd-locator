@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: bd-locator-backend
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/bdlocator}
+    username: ${SPRING_DATASOURCE_USERNAME:bdlocator}
+    password: ${SPRING_DATASOURCE_PASSWORD:bdlocator}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  flyway:
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+server:
+  port: 8080
+
+app:
+  cqc:
+    base-url: https://api.service.cqc.org.uk/public/v1
+    subscription-key: ${CQC_SUBSCRIPTION_KEY:}
+    page-size: 1000
+  postcodes:
+    base-url: https://api.postcodes.io
+  companies-house:
+    base-url: https://api.company-information.service.gov.uk
+    api-key: ${COMPANIES_HOUSE_API_KEY:}
+  llm:
+    provider: ${LLM_PROVIDER:anthropic}
+    api-key: ${LLM_API_KEY:}
+  scoring:
+    default-radius-km: 5.0
+    max-radius-km: 25.0
+    h3-resolution: 8
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
