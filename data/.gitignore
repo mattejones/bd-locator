@@ -1,0 +1,7 @@
+# Ignore CQC care directory files — too large for git and updated monthly
+*.csv
+*.ods
+
+# Keep this directory tracked
+!.gitignore
+!README.md

@@ -1,8 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Empty turbopack config silences the webpack/turbopack conflict warning.
-  // File watch polling for WSL is handled via WATCHPACK_POLLING=true in the dev script.
+  // Standalone output for Docker — produces a self-contained server.js
+  output: "standalone",
   turbopack: {},
 };
 
