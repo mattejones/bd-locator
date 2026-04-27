@@ -34,4 +34,27 @@ public interface LocationRepository extends JpaRepository<Location, String> {
             @Param("lng") double lng,
             @Param("radiusMetres") double radiusMetres
     );
+
+    /**
+     * Returns the distance in metres between a location and an origin point.
+     * Used by the scoring engine to compute proximity decay per candidate.
+     */
+    @Query(value = """
+            SELECT ST_Distance(
+                l.coordinates::geography,
+                ST_SetSRID(ST_MakePoint(:lng, :lat), 4326)::geography
+            )
+            FROM locations l
+            WHERE l.location_id = :locationId
+            """, nativeQuery = true)
+    Double distanceMetresTo(
+            @Param("locationId") String locationId,
+            @Param("lat") double lat,
+            @Param("lng") double lng
+    );
+
+    /**
+     * Counts how many locations belong to a provider — used as the scale signal.
+     */
+    long countByProviderProviderId(String providerId);
 }
