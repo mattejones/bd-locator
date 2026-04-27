@@ -3,6 +3,7 @@ package xyz.mej.bdlocator.api.controller;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import xyz.mej.bdlocator.api.dto.*;
+import xyz.mej.bdlocator.llm.IcpExpansionService;
 import xyz.mej.bdlocator.scoring.ScoredLocation;
 import xyz.mej.bdlocator.scoring.ScoringService;
 import xyz.mej.bdlocator.scoring.ScoringWeights;
@@ -18,14 +19,12 @@ import java.util.Set;
 public class SearchController {
 
     private final ScoringService scoringService;
+    private final IcpExpansionService icpExpansionService;
 
     @PostMapping("/search")
     public SearchResponse search(@Valid @RequestBody SearchRequest request) {
         ScoringWeights weights = resolveWeights(request.getWeights());
-
-        // ICP expansion via LLM is wired in Phase 5.
-        // For now pass an empty set — no gate applied.
-        Set<String> icpKeywords = Set.of();
+        Set<String> icpKeywords = icpExpansionService.expand(request.getIcpDescription());
 
         List<ScoredLocation> results = scoringService.score(
                 request.getLat(),
